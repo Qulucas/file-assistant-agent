@@ -1,0 +1,16 @@
+month,service,usd
+2025-09,scheduler,2083
+2025-09,search,3160
+2025-09,authz,2452
+2025-10,ingest,2490
+2025-10,search,1227
+2025-10,authz,232
+2025-11,scheduler,346
+2025-11,billing,997
+2025-11,authz,2352
+2025-12,ingest,3480
+2025-12,api,2330
+2025-12,authz,1726
+2026-01,api,509
+2026-01,scheduler,1929
+2026-01,search,3005
