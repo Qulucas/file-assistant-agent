@@ -8,12 +8,16 @@
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-export OPENAI_API_KEY=<你的 key>          # 任意 OpenAI 兼容端点
-export OPENAI_BASE_URL=https://api.deepseek.com/v1   # DeepSeek / GLM / 其他
-export OPENAI_MODEL=deepseek-chat
+cp .env.example .env              # 填入你的 key(DeepSeek / GLM / 其他 OpenAI 兼容端点)
+# 或直接导出环境变量:
+# export OPENAI_API_KEY=<你的 key>
+# export OPENAI_BASE_URL=https://api.deepseek.com/v1
+# export OPENAI_MODEL=deepseek-chat
 
 .venv/bin/python agent.py --workspace ./workspace --task "你的自然语言指令"
 ```
+
+优先级:CLI 参数 > 已导出的环境变量 > `.env` 文件。`.env` 已被 .gitignore 排除,不会提交。
 
 workspace 路径可任意指定;任务完成后在 `./workspace` 内产出产物(如 `falcon_index.md`、`archive/`),运行目录生成 `trace.jsonl`:
 

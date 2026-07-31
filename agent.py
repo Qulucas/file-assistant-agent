@@ -4,6 +4,8 @@ import argparse
 import os
 import sys
 
+from dotenv import load_dotenv
+
 from falcon_agent import AgentLoop, ContextManager, LLMClient, ToolRegistry, TraceLogger, WorkspaceSandbox
 
 
@@ -21,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    load_dotenv()
     args = build_parser().parse_args(argv)
     if not args.api_key:
         print("error: no API key. Set OPENAI_API_KEY or pass --api-key.", file=sys.stderr)
