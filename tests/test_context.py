@@ -1,6 +1,11 @@
 import json
 
-from falcon_agent.context import ContextManager, estimated_tokens, wrap_tool_result
+from falcon_agent.context import (
+    DATA_WARNING,
+    ContextManager,
+    estimated_tokens,
+    wrap_tool_result,
+)
 
 
 def tool_round(n: int, result_len: int = 4000) -> list[dict]:
@@ -26,6 +31,7 @@ def tool_round(n: int, result_len: int = 4000) -> list[dict]:
 def test_wrap_tool_result_structure():
     wrapped = wrap_tool_result("search", {"pattern": "Falcon"}, "line1\nline2")
     assert wrapped.startswith("<tool_result tool='search' args={\"pattern\": \"Falcon\"}>")
+    assert DATA_WARNING in wrapped
     assert "line1\nline2" in wrapped
     assert wrapped.endswith("</tool_result>")
 

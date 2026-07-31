@@ -94,7 +94,25 @@ def test_move_refuses_overwrite(registry: ToolRegistry):
 
 def test_move_escape_rejected(registry: ToolRegistry, tmp_path: Path):
     out = registry.execute("move_file", {"src": "drafts/active.md", "dst": "../evil.md"})
-    assert "Error" in out or "escapes" in out
+    assert "[BLOCKED]" in out
+
+
+def test_read_escape_blocked_marker(registry: ToolRegistry):
+    out = registry.execute("read_file", {"path": "../secret.txt"})
+    assert "[BLOCKED]" in out
+    assert "sandbox violation" in out
+
+
+def test_missing_file_is_plain_error_not_blocked(registry: ToolRegistry):
+    out = registry.execute("read_file", {"path": "does-not-exist.md"})
+    assert "Error" in out
+    assert "[BLOCKED]" not in out
+
+
+def test_is_error_result(registry: ToolRegistry):
+    assert registry.is_error_result("Error: x")
+    assert registry.is_error_result("[BLOCKED] sandbox violation: x")
+    assert not registry.is_error_result("wrote 10 bytes to a.txt")
 
 
 def test_unknown_tool_raises(registry: ToolRegistry):

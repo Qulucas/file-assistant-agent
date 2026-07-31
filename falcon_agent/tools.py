@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from falcon_agent.sandbox import WorkspaceSandbox
+from falcon_agent.sandbox import SandboxViolation, ToolError, WorkspaceSandbox
 
 MAX_RESULT_CHARS = 6000
 TRUNCATED_MARK = "...(truncated, remaining output omitted)"
@@ -148,9 +148,16 @@ class ToolRegistry:
             raise KeyError(f"unknown tool: {name!r}")
         try:
             raw = tool.handler(**args)
+        except SandboxViolation as exc:
+            raw = f"[BLOCKED] sandbox violation: {exc}"
+        except ToolError as exc:
+            raw = f"Error: {exc}"
         except Exception as exc:
             raw = f"Error: {exc}"
         return truncate_result(raw, self.result_limit)
+
+    def is_error_result(self, result: str) -> bool:
+        return result.startswith(("Error:", "[BLOCKED]"))
 
     def _list_dir(self, path: str = ".", recursive: bool = False) -> str:
         if recursive:

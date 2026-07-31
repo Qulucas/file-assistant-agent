@@ -7,6 +7,7 @@ import sys
 from dotenv import load_dotenv
 
 from falcon_agent import AgentLoop, ContextManager, LLMClient, ToolRegistry, TraceLogger, WorkspaceSandbox
+from falcon_agent.agent import SYSTEM_PROMPT
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -36,7 +37,11 @@ def main(argv: list[str] | None = None) -> int:
     trace = TraceLogger(args.trace)
     loop = AgentLoop(llm=llm, registry=registry, context=context, trace=trace, max_steps=args.steps)
 
-    result = loop.run(args.task)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": args.task},
+    ]
+    result = loop.run(messages)
     print(result["final"])
     print(
         f"\n[trace] {args.trace}: {result['steps']} tool steps, "

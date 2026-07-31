@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from falcon_agent.sandbox import SandboxViolation, WorkspaceSandbox
+from falcon_agent.sandbox import SandboxViolation, ToolError, WorkspaceSandbox
 
 
 @pytest.fixture
@@ -88,7 +88,7 @@ def test_read_text(sandbox: WorkspaceSandbox):
 
 
 def test_read_missing_file_raises(sandbox: WorkspaceSandbox):
-    with pytest.raises(SandboxViolation):
+    with pytest.raises(ToolError):
         sandbox.read_text("nope.txt")
 
 
@@ -104,7 +104,7 @@ def test_move_within_root(sandbox: WorkspaceSandbox):
 
 
 def test_move_refuses_overwrite(sandbox: WorkspaceSandbox):
-    with pytest.raises(SandboxViolation):
+    with pytest.raises(ToolError):
         sandbox.move("a.txt", "sub/b.txt")
 
 
@@ -114,7 +114,7 @@ def test_move_overwrite_flag(sandbox: WorkspaceSandbox):
 
 
 def test_move_missing_source_raises(sandbox: WorkspaceSandbox):
-    with pytest.raises(SandboxViolation):
+    with pytest.raises(ToolError):
         sandbox.move("nope.txt", "sub/x.txt")
 
 

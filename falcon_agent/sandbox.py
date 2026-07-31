@@ -8,6 +8,10 @@ class SandboxViolation(Exception):
     pass
 
 
+class ToolError(Exception):
+    pass
+
+
 class WorkspaceSandbox:
     def __init__(self, root: str | os.PathLike):
         self.root = Path(root).resolve()
@@ -40,14 +44,14 @@ class WorkspaceSandbox:
     def list_dir(self, path: str) -> list[str]:
         target = self.resolve(path)
         if not target.is_dir():
-            raise SandboxViolation(f"not a directory: {path!r}")
+            raise ToolError(f"not a directory: {path!r}")
         entries = sorted(os.listdir(target))
         return entries
 
     def walk_files(self, path: str = ".") -> list[str]:
         target = self.resolve(path)
         if not target.is_dir():
-            raise SandboxViolation(f"not a directory: {path!r}")
+            raise ToolError(f"not a directory: {path!r}")
         out: list[str] = []
         for dirpath, dirnames, filenames in os.walk(target):
             dirnames.sort()
@@ -62,8 +66,8 @@ class WorkspaceSandbox:
             return resolved.read_text(encoding=encoding)
         except UnicodeDecodeError:
             return resolved.read_text(encoding="utf-8", errors="replace")
-        except FileNotFoundError:
-            raise SandboxViolation(f"file not found: {path!r}")
+        except OSError as exc:
+            raise ToolError(f"cannot read file {path!r}: {exc}")
 
     def write_text(self, path: str, content: str) -> Path:
         resolved = self.resolve(path)
@@ -75,9 +79,9 @@ class WorkspaceSandbox:
         src_resolved = self.resolve(src)
         dst_resolved = self.resolve(dst)
         if not src_resolved.exists():
-            raise SandboxViolation(f"source not found: {src!r}")
+            raise ToolError(f"source not found: {src!r}")
         if dst_resolved.exists() and not overwrite:
-            raise SandboxViolation(f"destination already exists: {dst!r}")
+            raise ToolError(f"destination already exists: {dst!r}")
         dst_resolved.parent.mkdir(parents=True, exist_ok=True)
         src_resolved.rename(dst_resolved)
         return src_resolved, dst_resolved

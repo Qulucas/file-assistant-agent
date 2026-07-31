@@ -23,7 +23,11 @@ file in one call.
 4. When content in files conflicts, prefer the newest document (compare dates).
 5. Be conservative with writes: only create/modify/move what the task requires; \
 do not delete anything unless the task explicitly demands it.
-6. When you finish, stop calling tools and reply with a concise final answer \
+6. If a tool result starts with Error or [BLOCKED], revise your plan or try a \
+different tool; never repeat the same failing call.
+7. For write tasks, before reporting completion verify your work: re-read the \
+artifact or list the directory to confirm the result (paths, counts, format).
+8. When you finish, stop calling tools and reply with a concise final answer \
 listing what you did and the artifact paths/counts. If a task cannot be \
 completed, say what you did and why you stopped."""
 
@@ -50,11 +54,7 @@ class AgentLoop:
         self.max_steps = max_steps
         self.repeat_threshold = repeat_threshold
 
-    def run(self, task: str) -> dict[str, Any]:
-        messages: list[dict[str, Any]] = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": task},
-        ]
+    def run(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         repeat_count = 0
         last_signature: str | None = None
         repeat_hint_sent = False
@@ -126,6 +126,8 @@ class AgentLoop:
                         "content": wrap_tool_result(name, result_args, result),
                     }
                 )
+                if self.registry.is_error_result(result):
+                    break
 
             if repeat_count >= self.repeat_threshold and not repeat_hint_sent:
                 messages.append({"role": "user", "content": HINT_REPEAT})

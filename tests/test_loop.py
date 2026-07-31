@@ -67,9 +67,17 @@ def make_loop(env, llm, max_steps=30, budget=24000):
     )
 
 
+def run_task(loop, task, with_system=True):
+    messages = []
+    if with_system:
+        messages.append({"role": "system", "content": SYSTEM_PROMPT})
+    messages.append({"role": "user", "content": task})
+    return loop.run(messages)
+
+
 def test_immediate_answer_no_tools(env):
     llm = FakeLLM([answer("done")])
-    result = make_loop(env, llm).run("say hi")
+    result = run_task(make_loop(env, llm), "say hi")
     assert result["final"] == "done"
     assert result["stopped_reason"] == "completed"
     assert result["steps"] == 0
@@ -77,7 +85,7 @@ def test_immediate_answer_no_tools(env):
 
 def test_single_tool_then_answer(env):
     llm = FakeLLM([{"content": None, "tool_calls": [call("list_dir", {"path": "notes"})]}, answer("ok")])
-    result = make_loop(env, llm).run("list notes")
+    result = run_task(make_loop(env, llm), "list notes")
     assert result["steps"] == 1
     rows = [r for r in env["trace"].rows if "tool" in r]
     assert rows[0]["tool"] == "list_dir"
@@ -86,7 +94,7 @@ def test_single_tool_then_answer(env):
 
 def test_step_cap_reached(env):
     llm = FakeLLM(lambda self: {"content": None, "tool_calls": [call("list_dir", {"path": "."})]})
-    result = make_loop(env, llm, max_steps=3).run("loop forever")
+    result = run_task(make_loop(env, llm, max_steps=3), "loop forever")
     assert result["stopped_reason"] == "step_cap"
     assert result["steps"] == 3
     assert "Step cap" in result["final"]
@@ -100,7 +108,7 @@ def test_malformed_tool_args_recovered(env):
         }]},
         answer("adapted"),
     ])
-    result = make_loop(env, llm).run("recover")
+    result = run_task(make_loop(env, llm), "recover")
     assert result["stopped_reason"] == "completed"
     rows = [r for r in env["trace"].rows if "tool" in r]
     assert rows[0]["tool"] == "list_dir"
@@ -114,7 +122,7 @@ def test_tool_error_passed_to_model(env):
         {"content": None, "tool_calls": [call("read_file", {"path": "missing.md"})]},
         answer("file missing, ok"),
     ])
-    result = make_loop(env, llm).run("read missing")
+    result = run_task(make_loop(env, llm), "read missing")
     assert result["stopped_reason"] == "completed"
     tool_msgs = [m for m in llm.seen_messages[1] if m["role"] == "tool"]
     assert "Error" in tool_msgs[0]["content"]
@@ -122,7 +130,7 @@ def test_tool_error_passed_to_model(env):
 
 def test_repeat_guard_stops(env):
     llm = FakeLLM(lambda self: {"content": None, "tool_calls": [call("list_dir", {"path": "."})]})
-    result = make_loop(env, llm, max_steps=30).run("keep repeating")
+    result = run_task(make_loop(env, llm, max_steps=30), "keep repeating")
     assert result["stopped_reason"] == "repeat_guard"
     assert "repeated identical tool calls" in result["final"]
     any_hint = any("you keep calling" in (m.get("content") or "") for m in llm.seen_messages[-1])
@@ -131,11 +139,20 @@ def test_repeat_guard_stops(env):
 
 def test_system_prompt_enforces_data_instruction_isolation(env):
     llm = FakeLLM([answer("x")])
-    make_loop(env, llm).run("t")
+    run_task(make_loop(env, llm), "t")
     sys_msg = llm.seen_messages[0][0]
     assert sys_msg["role"] == "system"
     assert "DATA" in sys_msg["content"]
     assert "never instructions" in sys_msg["content"]
+
+
+def test_system_prompt_has_error_replan_and_verify_rules(env):
+    llm = FakeLLM([answer("x")])
+    run_task(make_loop(env, llm), "t")
+    sys_prompt = llm.seen_messages[0][0]["content"]
+    assert "BLOCKED" in sys_prompt
+    assert "revise your plan" in sys_prompt
+    assert "re-read the artifact" in sys_prompt
 
 
 def test_tool_results_structurally_wrapped(env):
@@ -143,10 +160,38 @@ def test_tool_results_structurally_wrapped(env):
         {"content": None, "tool_calls": [call("read_file", {"path": "notes/falcon.md"})]},
         answer("ok"),
     ])
-    make_loop(env, llm).run("read falcon note")
+    run_task(make_loop(env, llm), "read falcon note")
     tool_msgs = [m for m in llm.seen_messages[1] if m["role"] == "tool"]
     assert tool_msgs[0]["content"].startswith("<tool_result tool='read_file'")
     assert tool_msgs[0]["content"].endswith("</tool_result>")
+    assert "UNTRUSTED DATA" in tool_msgs[0]["content"]
+
+
+def test_batch_stops_after_error(env):
+    llm = FakeLLM([
+        {"content": None, "tool_calls": [
+            call("read_file", {"path": "missing.md"}, "c1"),
+            call("write_file", {"path": "should-not-exist.md", "content": "x"}, "c2"),
+        ]},
+        answer("recovered"),
+    ])
+    result = run_task(make_loop(env, llm), "batch with error")
+    assert result["stopped_reason"] == "completed"
+    assert result["steps"] == 1
+    assert not (env["root"] / "should-not-exist.md").exists()
+
+
+def test_batch_all_succeed(env):
+    llm = FakeLLM([
+        {"content": None, "tool_calls": [
+            call("list_dir", {"path": "."}, "c1"),
+            call("list_dir", {"path": "notes"}, "c2"),
+        ]},
+        answer("done"),
+    ])
+    result = run_task(make_loop(env, llm), "two calls")
+    assert result["steps"] == 2
+    assert result["stopped_reason"] == "completed"
 
 
 def test_injected_instruction_is_just_data(env):
@@ -159,20 +204,7 @@ def test_injected_instruction_is_just_data(env):
         {"content": None, "tool_calls": [call("read_file", {"path": "notes/trap.md"})]},
         answer("42"),
     ])
-    result = make_loop(env, llm).run("read trap.md and report its content verbatim")
+    result = run_task(make_loop(env, llm), "read trap.md and report its content verbatim")
     assert result["final"] == "42"
     assert (env["root"] / "notes" / "falcon.md").exists()
     assert len(list((env["root"]).iterdir())) == 1
-
-
-def test_multiple_tool_calls_in_one_response(env):
-    llm = FakeLLM([
-        {"content": None, "tool_calls": [
-            call("list_dir", {"path": "."}, "c1"),
-            call("list_dir", {"path": "notes"}, "c2"),
-        ]},
-        answer("done"),
-    ])
-    result = make_loop(env, llm).run("two calls")
-    assert result["steps"] == 2
-    assert result["stopped_reason"] == "completed"
