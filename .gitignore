@@ -8,3 +8,5 @@ trace.jsonl
 demo_workspace/
 demo_runs/
 
+.vercel
+.env*
