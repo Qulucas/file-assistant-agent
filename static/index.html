@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>文件助理 Agent Demo</title>
+<style>
+  :root { --bg:#0f1117; --panel:#171a23; --panel2:#1e2230; --border:#2a2f3f;
+          --fg:#e6e8ee; --muted:#8b90a0; --accent:#4f8cff; --ok:#2ecc71; --err:#ff6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.5 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { display:flex; align-items:center; gap:16px; padding:10px 18px;
+           border-bottom:1px solid var(--border); background:var(--panel); }
+  header h1 { font-size:16px; margin:0; }
+  .stat { color:var(--muted); font-size:12px; }
+  #stats { margin-left:auto; display:flex; gap:14px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:6px;
+           padding:8px 14px; cursor:pointer; font-size:13px; }
+  button:disabled { opacity:.45; cursor:not-allowed; }
+  button.ghost { background:var(--panel2); border:1px solid var(--border); color:var(--fg); }
+  .layout { display:grid; grid-template-columns:300px 1fr; height:calc(100vh - 50px); }
+  aside { border-right:1px solid var(--border); overflow:auto; padding:10px; background:var(--panel); }
+  main { display:grid; grid-template-rows:auto 1fr; padding:14px; gap:12px; overflow:hidden; }
+  #task { width:100%; min-height:56px; background:var(--panel2); color:var(--fg);
+          border:1px solid var(--border); border-radius:8px; padding:10px; resize:vertical; }
+  .row { display:flex; gap:10px; align-items:flex-start; }
+  #runBtn { margin-top:4px; }
+  #log { overflow:auto; background:var(--panel); border:1px solid var(--border);
+         border-radius:8px; padding:12px; font:12px/1.6 ui-monospace, Menlo, monospace; }
+  .step { border-left:3px solid var(--border); margin-bottom:10px; padding-left:8px; }
+  .step .head { color:var(--accent); }
+  .step .args { color:var(--muted); white-space:pre-wrap; word-break:break-all; }
+  .step .res { color:#a7e3a7; white-space:pre-wrap; word-break:break-all; }
+  .step.err { border-left-color:var(--err); }
+  .step .res.err { color:var(--err); }
+  #final { background:#10281a; border:1px solid var(--ok); border-radius:8px;
+           padding:12px; margin-top:10px; white-space:pre-wrap; display:none; }
+  #overlay { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex;
+             align-items:center; justify-content:center; z-index:9; }
+  #overlay .card { background:var(--panel); border:1px solid var(--border); border-radius:10px;
+                   padding:24px; width:320px; }
+  #pw { width:100%; padding:8px; margin:10px 0; background:var(--panel2);
+        color:var(--fg); border:1px solid var(--border); border-radius:6px; }
+  ul.tree { list-style:none; padding-left:12px; margin:0; }
+  ul.tree ul { display:none; }
+  li.dir.open > ul { display:block; }
+  .caret { cursor:pointer; color:var(--muted); user-select:none; }
+  .file { cursor:pointer; }
+  .file:hover { color:var(--accent); }
+  #fileview { margin-top:8px; background:var(--panel2); border:1px solid var(--border);
+              border-radius:6px; padding:8px; white-space:pre-wrap; word-break:break-all;
+              font:12px ui-monospace, Menlo, monospace; max-height:40vh; overflow:auto; }
+  #error { color:var(--err); font-size:13px; display:none; padding:8px; }
+  .badge { display:inline-block; padding:1px 6px; border-radius:4px; font-size:11px;
+           background:var(--panel2); color:var(--muted); margin-left:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>文件助理 Agent</h1>
+  <span class="stat">手写 agent 循环 · 沙箱 · 实时步骤</span>
+  <div id="stats">
+    <span class="stat">LLM 调用 <b id="sCalls">–</b></span>
+    <span class="stat">Prompt tokens <b id="sPrompt">–</b></span>
+    <span class="stat">Completion tokens <b id="sComplete">–</b></span>
+    <button class="ghost" id="resetBtn">重置 workspace</button>
+    <button class="ghost" id="logoutBtn">退出</button>
+  </div>
+</header>
+
+<div id="overlay">
+  <div class="card">
+    <h3>Demo 口令</h3>
+    <p style="color:var(--muted);font-size:12px">部署者设置的简单口令,用于防滥用。</p>
+    <input id="pw" type="password" placeholder="输入口令" autocomplete="current-password">
+    <button id="pwBtn" style="width:100%">进入</button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside>
+    <b>Workspace</b>
+    <div id="tree">加载中…</div>
+    <div id="fileview"></div>
+  </aside>
+  <main>
+    <div class="row">
+      <textarea id="task" placeholder="输入自然语言指令,例如:找出所有提到 Project Falcon 的文件并生成 falcon_index.md"></textarea>
+      <button id="runBtn">运行</button>
+    </div>
+    <div id="error"></div>
+    <div id="log"><span style="color:var(--muted)">运行历史会实时显示在这里。</span></div>
+    <div id="final"></div>
+  </main>
+</div>
+
+<script>
+const tokenKey = "demo_token";
+let token = localStorage.getItem(tokenKey) || "";
+
+function auth() { return { "X-Demo-Token": token }; }
+async function j(res) {
+  if (!res.ok) {
+    let d = {};
+    try { d = await res.json(); } catch (e) {}
+    throw new Error(d.detail || (res.status + " " + res.statusText));
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+function showOverlay() { document.getElementById("overlay").style.display = "flex"; }
+function hideOverlay() { document.getElementById("overlay").style.display = "none"; }
+
+async function tryToken(t) {
+  const res = await fetch("/api/tree", { headers: { "X-Demo-Token": t } });
+  if (res.ok) { token = t; localStorage.setItem(tokenKey, t); hideOverlay(); loadTree(); }
+  else alert("口令错误或未配置");
+}
+document.getElementById("pwBtn").onclick = () => tryToken(document.getElementById("pw").value);
+document.getElementById("pw").addEventListener("keydown", e => { if (e.key === "Enter") tryToken(e.target.value); });
+document.getElementById("logoutBtn").onclick = () => { localStorage.removeItem(tokenKey); token = ""; showOverlay(); };
+
+if (!token) showOverlay(); else { hideOverlay(); loadTree(); }
+
+async function loadTree() {
+  try {
+    const data = await j(await fetch("/api/tree", { headers: auth() }));
+    const root = document.createElement("ul"); root.className = "tree";
+    renderTree(data, root, data.name);
+    const box = document.getElementById("tree");
+    box.innerHTML = ""; box.appendChild(root);
+  } catch (e) { document.getElementById("tree").textContent = "加载失败: " + e.message; }
+}
+
+function renderTree(node, ul, path) {
+  for (const child of (node.children || [])) {
+    const li = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = child.name + (child.type === "file" ? "" : "/");
+    const childPath = path + "/" + child.name;
+    if (child.type === "dir") {
+      label.className = "caret";
+      li.classList.add("dir");
+      label.onclick = () => li.classList.toggle("open");
+      const sub = document.createElement("ul"); sub.className = "tree";
+      renderTree(child, sub, childPath);
+      li.appendChild(label); li.appendChild(sub);
+    } else {
+      label.className = "file";
+      label.onclick = () => openFile(childPath);
+      li.appendChild(label);
+    }
+    ul.appendChild(li);
+  }
+}
+
+async function openFile(path) {
+  try {
+    const d = await j(await fetch("/api/file?path=" + encodeURIComponent(path), { headers: auth() }));
+    const el = document.getElementById("fileview");
+    el.textContent = (d.truncated ? "…(文件过大,已截断前 200KB)\n" : "") + d.content;
+  } catch (e) { document.getElementById("fileview").textContent = "读取失败: " + e.message; }
+}
+
+document.getElementById("resetBtn").onclick = async () => {
+  if (!confirm("重置 workspace 会丢弃当前所有修改,确定?")) return;
+  try {
+    await j(await fetch("/api/reset", { method: "POST", headers: auth() }));
+    await loadTree();
+  } catch (e) { alert("重置失败: " + e.message); }
+};
+
+function el(id) { return document.getElementById(id); }
+function addStep(ev) {
+  const box = el("log");
+  const div = document.createElement("div");
+  div.className = "step" + (ev.result_summary && ev.result_summary.startsWith("[BLOCKED]") ? " err" : "");
+  div.innerHTML =
+    '<div class="head">#' + ev.step + ' · ' + escapeHtml(ev.tool) + '()</div>' +
+    '<div class="args">' + escapeHtml(JSON.stringify(ev.args || {})) + "</div>" +
+    '<div class="res">' + escapeHtml(ev.result_summary || "") + "</div>";
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+function setStats(s) {
+  el("sCalls").textContent = s.llm_calls ?? "–";
+  el("sPrompt").textContent = s.prompt_tokens ?? "–";
+  el("sComplete").textContent = s.completion_tokens ?? "–";
+}
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function streamRun(runId) {
+  const res = await fetch("/api/runs/" + runId + "/events", { headers: auth() });
+  if (!res.ok) throw new Error((await res.json()).detail || "stream failed");
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf("\n\n")) !== -1) {
+      const chunk = buf.slice(0, idx); buf = buf.slice(idx + 2);
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data: ")) continue;
+        let ev; try { ev = JSON.parse(line.slice(6)); } catch (e) { continue; }
+        if (ev.type === "tool") addStep(ev);
+        else if (ev.type === "result" || ev.type === "error") return ev;
+      }
+    }
+  }
+  return null;
+}
+
+el("runBtn").onclick = async () => {
+  const task = el("task").value.trim();
+  if (!task) return alert("请输入任务");
+  const runBtn = el("runBtn");
+  runBtn.disabled = true;
+  el("log").innerHTML = ""; el("final").style.display = "none";
+  setStats({});
+  try {
+    const { run_id } = await j(await fetch("/api/runs", {
+      method: "POST", headers: { ...auth(), "Content-Type": "application/json" },
+      body: JSON.stringify({ task }),
+    }));
+    const result = await streamRun(run_id);
+    if (result && result.type === "result") {
+      const f = el("final");
+      f.textContent = result.final;
+      f.style.display = "block";
+      setStats(result);
+    } else if (result) {
+      el("error").textContent = "运行出错: " + result.detail;
+      el("error").style.display = "block";
+    }
+  } catch (e) {
+    el("error").textContent = "请求失败: " + e.message;
+    el("error").style.display = "block";
+  } finally {
+    runBtn.disabled = false;
+    loadTree();
+  }
+};
+</script>
+</body>
+</html>

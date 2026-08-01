@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, Callable
 
 from falcon_agent.context import ContextManager, wrap_tool_result
 from falcon_agent.llm import LLMClient
@@ -29,7 +29,12 @@ different tool; never repeat the same failing call.
 artifact or list the directory to confirm the result (paths, counts, format).
 8. When you finish, stop calling tools and reply with a concise final answer \
 listing what you did and the artifact paths/counts. If a task cannot be \
-completed, say what you did and why you stopped."""
+completed, say what you did and why you stopped.
+9. If the task has exclusion criteria (e.g. "excluding files that contain \
+X"), you must actively verify before producing output: re-search for X \
+right before writing, read every file that matches (or whose name suggests \
+it matches), and exclude them. Never include a matching file merely because \
+it appeared in an earlier directory listing or was never read."""
 
 HINT_REPEAT = (
     "Note: you keep calling the same tool with identical arguments. "
@@ -46,6 +51,7 @@ class AgentLoop:
         trace: TraceLogger | None = None,
         max_steps: int = 30,
         repeat_threshold: int = 3,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
     ):
         self.llm = llm
         self.registry = registry
@@ -53,6 +59,7 @@ class AgentLoop:
         self.trace = trace or TraceLogger()
         self.max_steps = max_steps
         self.repeat_threshold = repeat_threshold
+        self.on_step = on_step
 
     def run(self, messages: list[dict[str, Any]]) -> dict[str, Any]:
         repeat_count = 0
@@ -107,6 +114,14 @@ class AgentLoop:
                         result_args = dict(args) if isinstance(args, dict) else {}
 
                 self.trace.tool_step(name, result_args, result)
+                if self.on_step:
+                    self.on_step({
+                        "type": "tool",
+                        "step": self.trace.step_count,
+                        "tool": name,
+                        "args": result_args,
+                        "result_summary": result.split("\n")[0][:300],
+                    })
                 messages.append(
                     {
                         "role": "assistant",
@@ -150,4 +165,6 @@ class AgentLoop:
 
         stats = {"stopped_reason": stopped_reason, **self.llm.usage()}
         self.trace.final(**stats)
+        if self.on_step:
+            self.on_step({"type": "final", "final": final, "steps": self.trace.step_count, **stats})
         return {"final": final, "steps": self.trace.step_count, **stats}

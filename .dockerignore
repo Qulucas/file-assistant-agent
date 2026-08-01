@@ -3,8 +3,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .env
-trace.jsonl
-.DS_Store
 demo_workspace/
 demo_runs/
-
+trace.jsonl
+.DS_Store
+.git/
