@@ -1,8 +1,8 @@
 # 文件助理 Agent
 
-一个手写 agent 循环的文件操作 agent:接受自然语言指令,通过自定义工具(list_dir / read_file / search / write_file / move_file)操作沙箱化 workspace。无 LangChain / LangGraph / Agents SDK——「执行工具 → 回填结果 → 决定继续或终止」的控制流全部自己实现(约 500 行)。
+一个手写 agent 循环的文件操作 agent:接受自然语言指令,通过自定义工具(list_dir / read_file / search / write_file / move_file)操作沙箱化 workspace。无 LangChain / LangGraph / Agents SDK——「执行工具 → 回填结果 → 决定继续或终止」的控制流全部自行实现(约 500 行)。
 
-针对 `Requirements.md` 中的两个主线任务(T1 跨文件索引、T2 受控清理)已用真实 LLM(DeepSeek)端到端验证通过,`scripts/verify_workspace.py` 产物校验 OK。
+针对 `Requirements.md` 中的两个主线任务(T1 跨文件索引、T2 受控清理)已用真实 LLM(DeepSeek)端到端验证通过,`scripts/verify_workspace.py` 产物校验 OK。Demo 演示口令仅存在于部署端环境变量,不随仓库分发。
 
 ## 快速开始
 
