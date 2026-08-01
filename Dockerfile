@@ -10,6 +10,6 @@ COPY agent.py server.py .env.example ./
 COPY static ./static
 COPY workspace ./workspace
 
-EXPOSE 8000
+EXPOSE 7860
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "7860"]

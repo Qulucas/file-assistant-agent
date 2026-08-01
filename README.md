@@ -1,3 +1,13 @@
+---
+title: File Assistant Agent Demo
+emoji: 🦅
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 文件助理 Agent
 
 一个手写 agent 循环的文件操作 agent:接受自然语言指令,通过自定义工具(list_dir / read_file / search / write_file / move_file)操作沙箱化 workspace。无 LangChain / LangGraph / Agents SDK——「执行工具 → 回填结果 → 决定继续或终止」的控制流全部自己实现(约 500 行)。
@@ -59,19 +69,24 @@ DEMO_PASSWORD=<DEMO_PASSWORD> DEMO_PORT=8000 .venv/bin/python server.py
 # 浏览器打开 http://localhost:8000 ,口令 <DEMO_PASSWORD>
 ```
 
-### 公网部署(一条命令起服务,两条命令上线)
+### 公网部署到 Hugging Face Spaces(两条命令上线)
 
 ```bash
-# 1. 本地:飞机构建好镜像(可选验证)
-docker build -t file-assistant-agent .
+# 1. 在网页上创建 Space:https://huggingface.co/new-space
+#    Space name: file-assistant-agent | SDK: Docker | License: 随意
 
-# 2. 部署到 Fly.io(需要免费账号)
-fly auth login
-fly launch   # 交互式:按提示创建应用,环境变量在下一步设置
+# 2. 本地推送(会触发 HF 自动构建;首次需要 huggingface_hub)
+pip install -U "huggingface_hub[cli]"
+hf auth login                        # 输入你的 HF token(https://huggingface.co/settings/tokens)
 
-# 3. 设置环境变量(在 Fly 控制台 或:)
-fly secrets set OPENAI_API_KEY=... DEMO_PASSWORD=... DEMO_TOKEN_BUDGET=1000000
+git remote add hf https://huggingface.co/spaces/<你的用户名>/file-assistant-agent
+git push hf main
+
+# 3. 设置 Secrets(网页 Space 的 Settings → Secrets,改完自动重启):
+#    OPENAI_API_KEY、OPENAI_BASE_URL(如需)、DEMO_PASSWORD
 ```
+
+部署后 URL:`https://huggingface.co/spaces/<用户名>/file-assistant-agent`(页面右上角可嵌入/直接访问)。免费 CPU Space 会在 48 小时无访问后休眠,首次访问需等待约 30 秒冷启动。
 
 环境变量见 `.env.example`(服务端从环境变量读取;`server.py` 也会读 `.env`)。
 
@@ -103,6 +118,6 @@ falcon_agent/
 ## 状态与诚实说明
 
 - 已做:核心 agent(循环/工具/安全/上下文/trace)、CLI、单元测试 73 项、真实 LLM 的 T1/T2 端到端验证、产物校验脚本、NOTES、在线 Demo(本地端到端验证通过)。
-- Demo 已就绪但**尚未上线公网**:仓库提供 Dockerfile + fly.toml + 一键部署命令,按上文两步即可拿到公网 URL。
+- Demo 已就绪但**尚未上线公网**:仓库提供 Dockerfile + HF Spaces 配置与推送命令,按上文三步即可拿到公网 URL。
 
 > 注:本仓库不含任何 API key;`.env` / 密钥已被 .gitignore 排除。
