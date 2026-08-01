@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from demo_storage import BlobStorage, LocalStorage, seed_files
+from server import _files_to_tree
 
 
 class FakeBlob:
@@ -19,17 +20,22 @@ class FakeBlob:
         self.size = len(data)
 
 
+class FakeGetResult:
+    def __init__(self, data: bytes):
+        self.content = data
+
+
 class FakeClient:
     def __init__(self):
         self.store: dict[str, FakeBlob] = {}
 
-    def put(self, pathname: str, data, access: str = "private", content_type: str = "application/octet-stream"):
+    def put(self, pathname: str, data, access: str = "private", content_type: str = "application/octet-stream", overwrite: bool = False):
         body = data.encode() if isinstance(data, str) else data
         self.store[pathname] = FakeBlob(pathname, f"https://blob/{pathname}", body)
 
-    def get(self, url: str) -> bytes:
+    def get(self, url: str, access: str = "public") -> FakeGetResult:
         pathname = url.removeprefix("https://blob/")
-        return self.store[pathname].data
+        return FakeGetResult(self.store[pathname].data)
 
     def list_objects(self, prefix: str = ""):
         class Listing:
@@ -141,3 +147,22 @@ def test_seed_files_skips_ds_store(tmp_path):
     (tmp_path / "ok.txt").write_text("fine")
     files = seed_files(tmp_path)
     assert set(files) == {"ok.txt"}
+
+
+def test_files_to_tree_nests_children():
+    files = [
+        {"path": "data/a.csv", "size": 8},
+        {"path": "data/b.csv", "size": 5},
+        {"path": "notes/sub/c.md", "size": 3},
+        {"path": "top.txt", "size": 1},
+    ]
+    tree = _files_to_tree(files)
+    by_name = {n["name"]: n for n in tree}
+    assert by_name["data"]["children"] == [
+        {"name": "a.csv", "type": "file", "size": 8},
+        {"name": "b.csv", "type": "file", "size": 5},
+    ]
+    assert by_name["notes"]["children"] == [
+        {"name": "sub", "type": "dir", "children": [{"name": "c.md", "type": "file", "size": 3}]}
+    ]
+    assert by_name["top.txt"] == {"name": "top.txt", "type": "file", "size": 1}

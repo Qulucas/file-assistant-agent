@@ -165,8 +165,14 @@ class BlobStorage(Storage):
             raise StorageError(f"blob list failed: {exc}") from exc
         return list(getattr(listing, "blobs", []) or [])
 
+    def _rel(self, blob: Any) -> str | None:
+        rel = blob.pathname[len(self.prefix) + 1 :]
+        if not rel or rel.endswith("/") or rel == ".lock":
+            return None
+        return rel
+
     def seed(self, seed_files: dict[str, bytes]) -> None:
-        if self._objects(f"{self.prefix}/"):
+        if any(self._rel(b) is not None for b in self._objects(f"{self.prefix}/")):
             return
         self._put_all(seed_files)
 
@@ -181,6 +187,7 @@ class BlobStorage(Storage):
                 data,
                 access="private",
                 content_type="application/octet-stream",
+                overwrite=True,
             )
 
     def _delete_all(self) -> None:
@@ -191,8 +198,13 @@ class BlobStorage(Storage):
 
     def materialize(self, dst_dir: Path) -> None:
         for blob in self._objects(f"{self.prefix}/"):
-            rel = blob.pathname[len(self.prefix) + 1 :]
-            data = self._client.get(blob.url)
+            rel = self._rel(blob)
+            if rel is None:
+                continue
+            try:
+                data = self._fetch_bytes(blob)
+            except Exception as exc:
+                raise StorageError(f"materialize failed for {rel!r} (url={blob.url}): {exc}") from exc
             p = dst_dir / rel
             p.parent.mkdir(parents=True, exist_ok=True)
             p.write_bytes(data)
@@ -200,24 +212,35 @@ class BlobStorage(Storage):
     def sync_from(self, src_dir: Path) -> None:
         files = _read_tree(src_dir)
         self._put_all(files)
-        remote = {b.pathname[len(self.prefix) + 1 :] for b in self._objects(f"{self.prefix}/")}
+        remote = {
+            rel
+            for b in self._objects(f"{self.prefix}/")
+            if (rel := self._rel(b)) is not None
+        }
         stale = [self._path(r) for r in remote - set(files)]
         if stale:
-            objs = [b for b in self._objects(f"{self.prefix}/") if b.pathname in set(stale)]
+            objs = [b for b in self._objects(f"{self.prefix}/") if self._path(self._rel(b) or "") in set(stale)]
             if objs:
                 self._client.delete([b.url for b in objs])
 
     def list_files(self) -> list[dict[str, Any]]:
         return [
-            {"path": b.pathname[len(self.prefix) + 1 :], "size": b.size}
+            {"path": self._rel(b), "size": b.size}
             for b in self._objects(f"{self.prefix}/")
+            if self._rel(b) is not None
         ]
 
     def read(self, rel: str) -> bytes:
+        if rel == ".lock":
+            raise StorageError(f"blob not found: {rel!r}")
         blob = self._find(self._path(rel))
         if blob is None:
             raise StorageError(f"blob not found: {rel!r}")
-        return self._client.get(blob.url)
+        return self._fetch_bytes(blob)
+
+    def _fetch_bytes(self, blob: Any) -> bytes:
+        data = self._client.get(blob.url, access="private")
+        return data.content if hasattr(data, "content") else data
 
     def _find(self, pathname: str) -> Any:
         for b in self._objects(f"{self.prefix}/"):
@@ -243,7 +266,8 @@ class BlobStorage(Storage):
                     time.sleep(0.3)
                     continue
             try:
-                created = float(self._client.get(existing.url).decode())
+                data = self._fetch_bytes(existing)
+                created = float(data.decode())
             except Exception:
                 created = 0.0
             if time.time() - created > self.lock_ttl:

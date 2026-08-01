@@ -101,14 +101,14 @@ async def api_tree(x_demo_token: str | None = Header(default=None)) -> dict[str,
 
 
 def _files_to_tree(files: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    root: dict[str, dict[str, Any]] = {}
+    root: dict[str, dict[str, Any]] = {"children": {}}
     for f in files:
         parts = f["path"].split("/")
         node = root
         for part in parts[:-1]:
-            node = node.setdefault(part, {"dir": True, "children": {}})
-        node[parts[-1]] = {"dir": False, "size": f["size"]}
-    return _render(root)
+            node = node["children"].setdefault(part, {"dir": True, "children": {}})
+        node["children"][parts[-1]] = {"dir": False, "size": f["size"]}
+    return _render(root["children"])
 
 
 def _render(node: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -130,6 +130,8 @@ async def api_file(path: str, x_demo_token: str | None = Header(default=None)) -
         data = _get_storage().read(rel)
     except (StorageError, FileNotFoundError, OSError):
         raise HTTPException(status_code=404, detail="not a file")
+    except Exception:
+        raise HTTPException(status_code=500, detail="failed to read file")
     size = len(data)
     truncated = size > MAX_FILE_BYTES
     text = data[:MAX_FILE_BYTES].decode("utf-8", errors="replace")
@@ -206,7 +208,10 @@ async def _run_stream(task: str):
                 try:
                     storage.materialize(tmp)
                     result = _run_agent(tmp, task, on_step)
-                    storage.sync_from(tmp)
+                    try:
+                        storage.sync_from(tmp)
+                    except Exception as exc:
+                        result = {**result, "sync_warning": f"{type(exc).__name__}: {exc}"}
                 finally:
                     import shutil
 
