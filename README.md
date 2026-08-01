@@ -55,22 +55,22 @@ OPENAI_API_KEY=... .venv/bin/pytest tests/ -m live   # 真实 LLM 端到端
 ### 本地跑 Demo
 
 ```bash
-DEMO_PASSWORD=<DEMO_PASSWORD> DEMO_PORT=8000 .venv/bin/python server.py
-# 浏览器打开 http://localhost:8000 ,口令 <DEMO_PASSWORD>
+DEMO_PASSWORD=<你的口令> DEMO_PORT=8000 .venv/bin/python server.py
+# 浏览器打开 http://localhost:8000 ,口令为上方设置的 DEMO_PASSWORD
 ```
 
 ### 公网部署到 Vercel Hobby(免费,几条命令上线)
 
-**已上线**:生产环境 `https://file-assistant-agent.vercel.app`(环境变量已配好:OPENAI_API_KEY / DEMO_PASSWORD / BLOB_READ_WRITE_TOKEN)。公开 Demo 口令:`<DEMO_PASSWORD>`(README 公开仓库内仅作演示,正式使用请改 `DEMO_PASSWORD`)。可用下面任一 API 直接体验:
+**已上线**:生产环境 `https://file-assistant-agent.vercel.app`(环境变量已配好:OPENAI_API_KEY / DEMO_PASSWORD / BLOB_READ_WRITE_TOKEN)。Demo 口令不公开在仓库内(部署者自设,`curl` 示例中的 `$DEMO_PASSWORD` 需替换为实际口令)。可用下面任一 API 直接体验:
 
 ```bash
 # 看 workspace 文件树
-curl -H "X-Demo-Token: <DEMO_PASSWORD>" https://file-assistant-agent.vercel.app/api/tree
+curl -H "X-Demo-Token: $DEMO_PASSWORD" https://file-assistant-agent.vercel.app/api/tree
 # 看某文件内容
-curl -H "X-Demo-Token: <DEMO_PASSWORD>" "https://file-assistant-agent.vercel.app/api/file?path=drafts/cloud-costs-summary.md"
+curl -H "X-Demo-Token: $DEMO_PASSWORD" "https://file-assistant-agent.vercel.app/api/file?path=drafts/cloud-costs-summary.md"
 # 下发任务(SSE 实时流)
 curl -N -X POST https://file-assistant-agent.vercel.app/api/runs \
-  -H "X-Demo-Token: <DEMO_PASSWORD>" -H "Content-Type: application/json" \
+  -H "X-Demo-Token: $DEMO_PASSWORD" -H "Content-Type: application/json" \
   -d '{"task":"把 data/2025-09-cloud-costs.csv 汇总成报告写到 drafts/"}'
 ```
 
@@ -126,6 +126,6 @@ falcon_agent/
 ## 状态与诚实说明
 
 - 已做:核心 agent(循环/工具/安全/上下文/trace)、CLI、单元测试 83 项、真实 LLM 的 T1/T2 端到端验证、产物校验脚本、NOTES、在线 Demo(本地端到端验证通过,serverless 化:Blob 存储 + 单请求内联流式运行)。
-- Demo 已上线公网并在 Vercel Blob 生产环境跑通完整任务:URL `https://file-assistant-agent.vercel.app`,SSE 实时步骤、文件树/读取、重置 workspace 均已验证;真实 T1 经公网运行约 40 步完成,产物正确同步回 Blob。公开口令 `<DEMO_PASSWORD>` 仅作演示。
+- Demo 已上线公网并在 Vercel Blob 生产环境跑通完整任务:URL `https://file-assistant-agent.vercel.app`,SSE 实时步骤、文件树/读取、重置 workspace 均已验证;真实 T1 经公网运行约 40 步完成,产物正确同步回 Blob。Demo 访问口令由部署者自设,不公开在仓库中。
 
 > 注:本仓库不含任何 API key;`.env` / 密钥已被 .gitignore 排除。
