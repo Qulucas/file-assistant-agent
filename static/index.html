@@ -192,9 +192,12 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-async function streamRun(runId) {
-  const res = await fetch("/api/runs/" + runId + "/events", { headers: auth() });
-  if (!res.ok) throw new Error((await res.json()).detail || "stream failed");
+async function streamRun(res) {
+  if (!res.ok) {
+    let d = {};
+    try { d = await res.json(); } catch (e) {}
+    throw new Error(d.detail || ("请求失败: " + res.status));
+  }
   const reader = res.body.getReader();
   const dec = new TextDecoder();
   let buf = "";
@@ -222,13 +225,13 @@ el("runBtn").onclick = async () => {
   const runBtn = el("runBtn");
   runBtn.disabled = true;
   el("log").innerHTML = ""; el("final").style.display = "none";
+  el("error").style.display = "none";
   setStats({});
   try {
-    const { run_id } = await j(await fetch("/api/runs", {
+    const result = await streamRun(await fetch("/api/runs", {
       method: "POST", headers: { ...auth(), "Content-Type": "application/json" },
       body: JSON.stringify({ task }),
     }));
-    const result = await streamRun(run_id);
     if (result && result.type === "result") {
       const f = el("final");
       f.textContent = result.final;

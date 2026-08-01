@@ -1,13 +1,3 @@
----
-title: File Assistant Agent Demo
-emoji: 🦅
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # 文件助理 Agent
 
 一个手写 agent 循环的文件操作 agent:接受自然语言指令,通过自定义工具(list_dir / read_file / search / write_file / move_file)操作沙箱化 workspace。无 LangChain / LangGraph / Agents SDK——「执行工具 → 回填结果 → 决定继续或终止」的控制流全部自己实现(约 500 行)。
@@ -69,30 +59,35 @@ DEMO_PASSWORD=<DEMO_PASSWORD> DEMO_PORT=8000 .venv/bin/python server.py
 # 浏览器打开 http://localhost:8000 ,口令 <DEMO_PASSWORD>
 ```
 
-### 公网部署到 Hugging Face Spaces(两条命令上线)
+### 公网部署到 Vercel Hobby(免费,几条命令上线)
+
+Vercel 用 Python/FastAPI 运行时托管 `server.py`;workspace 存于 **Vercel Blob**(serverless 无本地磁盘),每次运行把 Blob 内容物化到函数内 `/tmp` 跑完再同步回去。函数最长运行 5 分钟,足够 T1/T2。
 
 ```bash
-# 1. 在网页上创建 Space:https://huggingface.co/new-space
-#    Space name: file-assistant-agent | SDK: Docker | License: 随意
+# 1. 安装 CLI 并登录
+npm i -g vercel
+vercel login
 
-# 2. 本地推送(会触发 HF 自动构建;首次需要 huggingface_hub)
-pip install -U "huggingface_hub[cli]"
-hf auth login                        # 输入你的 HF token(https://huggingface.co/settings/tokens)
+# 2. 一键部署(会提示关联/创建项目)
+vercel --prod
 
-git remote add hf https://huggingface.co/spaces/<你的用户名>/file-assistant-agent
-git push hf main
+# 3. 创建 Blob store(Vercel 控制台 → Storage → Create Blob store → 连到本项目),
+#    它会自动注入 BLOB_READ_WRITE_TOKEN
 
-# 3. 设置 Secrets(网页 Space 的 Settings → Secrets,改完自动重启):
-#    OPENAI_API_KEY、OPENAI_BASE_URL(如需)、DEMO_PASSWORD
+# 4. 设置环境变量(vercel env add 或控制台 Settings → Environment Variables):
+#    OPENAI_API_KEY、OPENAI_BASE_URL(如需)、OPENAI_MODEL、DEMO_PASSWORD
+vercel env add OPENAI_API_KEY production
+vercel env add DEMO_PASSWORD production
+vercel redeploy --prod
 ```
 
-部署后 URL:`https://huggingface.co/spaces/<用户名>/file-assistant-agent`(页面右上角可嵌入/直接访问)。免费 CPU Space 会在 48 小时无访问后休眠,首次访问需等待约 30 秒冷启动。
+部署后 URL:`https://<项目名>.vercel.app`。注意:Hobby 函数最长 300s;免费档每 IP 限流在 serverless 下按实例尽力而为(README 防滥用条款里已注明)。
 
-环境变量见 `.env.example`(服务端从环境变量读取;`server.py` 也会读 `.env`)。
+环境变量见 `.env.example`(服务端从环境变量读取;本地跑 `server.py` 也会读 `.env`)。
 
 ### Demo 防滥用(一句话做法)
 
-简单口令(`DEMO_PASSWORD`,所有 API 必须带 `X-Demo-Token` 头)+ 每 IP 每分钟限 6 次任务下发 + 服务端全局 LLM token 预算上限(`DEMO_TOKEN_BUDGET`,默认 100 万,超出后返回 503)+ 单次任务步数上限 60;API key 只存服务端环境变量,不进代码与仓库。
+简单口令(`DEMO_PASSWORD`,所有 API 必须带 `X-Demo-Token` 头)+ 每 IP 每分钟限 6 次任务下发 + 服务端全局 LLM token 预算上限(`DEMO_TOKEN_BUDGET`,默认 100 万,超出后返回 503)+ 单次任务步数上限 60;API key 只存服务端环境变量,不进代码与仓库。本地运行每 IP 限流生效;Vercel serverless 下限流按实例尽力而为、全局 token 预算为进程内计数。
 
 ## 框架结构
 
@@ -117,7 +112,7 @@ falcon_agent/
 
 ## 状态与诚实说明
 
-- 已做:核心 agent(循环/工具/安全/上下文/trace)、CLI、单元测试 73 项、真实 LLM 的 T1/T2 端到端验证、产物校验脚本、NOTES、在线 Demo(本地端到端验证通过)。
-- Demo 已就绪但**尚未上线公网**:仓库提供 Dockerfile + HF Spaces 配置与推送命令,按上文三步即可拿到公网 URL。
+- 已做:核心 agent(循环/工具/安全/上下文/trace)、CLI、单元测试 80 项、真实 LLM 的 T1/T2 端到端验证、产物校验脚本、NOTES、在线 Demo(本地端到端验证通过,serverless 化:Blob 存储 + 单请求内联流式运行)。
+- Demo 已就绪但**尚未上线公网**:仓库提供 Vercel Hobby 配置与部署命令,按上文即可拿到公网 URL。
 
 > 注:本仓库不含任何 API key;`.env` / 密钥已被 .gitignore 排除。
