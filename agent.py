@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=os.environ.get("OPENAI_MODEL", "deepseek-chat"))
     p.add_argument("--base-url", default=os.environ.get("OPENAI_BASE_URL", None))
     p.add_argument("--api-key", default=os.environ.get("OPENAI_API_KEY", ""))
-    p.add_argument("--steps", type=int, default=30, help="max tool steps (default 30)")
+    p.add_argument("--steps", type=int, default=60, help="max tool steps (default 60)")
     p.add_argument("--trace", default="trace.jsonl", help="trace output file (jsonl)")
     p.add_argument("--context-budget", type=int, default=24000, help="approx token budget for the LLM context window")
     return p

@@ -63,8 +63,6 @@ def _check_auth(x_demo_token: str | None) -> None:
 
 
 async def _check_rate(ip: str) -> None:
-    if STORAGE_KIND == "blob":
-        return
     now = time.monotonic()
     async with _clock_lock:
         while _run_clock and now - _run_clock[0] > 60:

@@ -34,7 +34,7 @@ workspace 路径可任意指定;任务完成后在 `./workspace` 内产出产物
 | `--workspace` | 必填 | workspace 根目录 |
 | `--task` | 必填 | 自然语言任务 |
 | `--model` / `--base-url` / `--api-key` | 环境变量 | OpenAI 兼容端点配置 |
-| `--steps` | 30 | 工具步数上限 |
+| `--steps` | 60 | 工具步数上限 |
 | `--trace` | trace.jsonl | trace 输出路径 |
 | `--context-budget` | 24000 | LLM 上下文 token 预算(估算) |
 
