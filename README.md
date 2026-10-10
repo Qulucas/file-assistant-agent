@@ -59,9 +59,9 @@ DEMO_PASSWORD=<你的口令> DEMO_PORT=8000 .venv/bin/python server.py
 # 浏览器打开 http://localhost:8000 ,口令为上方设置的 DEMO_PASSWORD
 ```
 
-### 公网部署到 Vercel Hobby(免费,几条命令上线)
+### 公网部署到 Vercel Hobby
 
-**已上线**:生产环境 `https://file-assistant-agent.vercel.app`(环境变量已配好:OPENAI_API_KEY / DEMO_PASSWORD / BLOB_READ_WRITE_TOKEN)。Demo 口令不公开在仓库内(部署者自设,`curl` 示例中的 `$DEMO_PASSWORD` 需替换为实际口令)。可用下面任一 API 直接体验:
+**已上线**:生产环境 `https://file-assistant-agent.vercel.app。可用下面任一 API 直接体验:
 
 ```bash
 # 看 workspace 文件树
@@ -98,7 +98,7 @@ vercel redeploy --prod
 
 环境变量见 `.env.example`(服务端从环境变量读取;本地跑 `server.py` 也会读 `.env`)。
 
-### Demo 防滥用(一句话做法)
+### Demo 防滥用
 
 简单口令(`DEMO_PASSWORD`,所有 API 必须带 `X-Demo-Token` 头)+ 每 IP 每分钟限 6 次任务下发 + 服务端全局 LLM token 预算上限(`DEMO_TOKEN_BUDGET`,默认 100 万,超出后返回 503)+ 单次任务步数上限 60;API key 只存服务端环境变量,不进代码与仓库。本地运行每 IP 限流生效;Vercel serverless 下限流按实例尽力而为、全局 token 预算为进程内计数。
 
@@ -128,4 +128,4 @@ falcon_agent/
 - 已做:核心 agent(循环/工具/安全/上下文/trace)、CLI、单元测试 83 项、真实 LLM 的 T1/T2 端到端验证、产物校验脚本、NOTES、在线 Demo(本地端到端验证通过,serverless 化:Blob 存储 + 单请求内联流式运行)。
 - Demo 已上线公网并在 Vercel Blob 生产环境跑通完整任务:URL `https://file-assistant-agent.vercel.app`,SSE 实时步骤、文件树/读取、重置 workspace 均已验证;真实 T1 经公网运行约 40 步完成,产物正确同步回 Blob。Demo 访问口令由部署者自设,不公开在仓库中。
 
-> 注:本仓库不含任何 API key;`.env` / 密钥已被 .gitignore 排除。
+
